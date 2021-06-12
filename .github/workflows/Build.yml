@@ -1,0 +1,56 @@
+name: mipsel-linux-uclibc
+
+on: 
+  release:
+    types: [published]
+  push:
+    tags:
+    - 'v*'
+  #  branches: 
+  #    - master
+#  schedule:
+#    - cron: 0 8 * * 5
+  watch:
+    types: [started]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd fakeroot \
+        cpio git python-docutils gettext automake autopoint texinfo build-essential help2man \
+        pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget  kmod
+    - name: Clone source code
+      run: |
+        git clone --depth=1 https://gitlab.com/dm38/padavan-ng.git /opt/rt-n56u
+        cd /opt/rt-n56u/toolchain
+        sudo ./clean_sources.sh
+        sudo ./build_toolchain.sh
+        cd /opt/rt-n56u/toolchain/out
+        tar -cJf mipsel-linux-uclibc.tar.xz *
+        mkdir -p /opt/images/
+        sudo mv -f /opt/rt-n56u/toolchain/out/*.xz /opt/images/
+    - name : Upload packages
+      uses: actions/upload-artifact@master
+      if: always()
+      with:
+        name: Padavan-packages
+        path: /opt/images
+    - name: Upload images to Releases
+      if: ${{ github.event_name == 'release' && success() }}
+      uses: svenstaro/upload-release-action@2.2.0
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: /opt/images/*.xz
+        tag: ${{ github.ref }}
+        overwrite: true
+        file_glob: true
